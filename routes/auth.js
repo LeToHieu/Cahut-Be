@@ -2,7 +2,26 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const nodemailer = require('nodemailer');
+const { MailtrapTransport } = require('mailtrap');
 const bcrypt = require('bcryptjs');
+
+// Cấu hình MailtrapTransport với API token
+const TOKEN = '5b5bb7d983357d6f7d499ff8d1ea40e6'; // API token của bạn
+const transporter = nodemailer.createTransport(
+  MailtrapTransport({
+    token: TOKEN,
+  })
+);
+
+// Định nghĩa sender
+const sender = {
+  address: 'hello@demomailtrap.co',
+  name: 'Cahut Password Reset',
+};
+
+// Lưu trữ mã reset tạm thời (trong memory)
+const resetCodes = new Map(); // { email: { code, expiresAt } }
 
 
 // Middleware xác thực token
@@ -44,6 +63,63 @@ router.post('/login', async (req, res) => {
     res.json({ token });
   } catch (err) {
     res.status(500).json({ message: 'Lỗi server' });
+  }
+});
+
+
+// Quên mật khẩu - Gửi mã qua email
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+  try {
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ message: 'Email không tồn tại' });
+
+    // Tạo mã code ngẫu nhiên (6 chữ số)
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 5 * 60 * 1000; // Hết hạn sau 5 phút
+    resetCodes.set(email, { code, expiresAt });
+
+    // Gửi email qua Mailtrap
+    const mailOptions = {
+      from: sender,
+      to: [email], // Đặt email người nhận dưới dạng mảng
+      subject: 'Mã đặt lại mật khẩu Cahut',
+      text: `Mã đặt lại mật khẩu của bạn là: ${code}. Mã này có hiệu lực trong 5 phút.`,
+      category: 'Password Reset', // Phân loại email
+    };
+    
+    await transporter.sendMail(mailOptions);
+
+    res.json({ message: 'Mã đã được gửi qua email' });
+  } catch (err) {
+    res.status(500).json({ message: 'Lỗi khi gửi email', error: err.message });
+  }
+});
+
+// Đặt lại mật khẩu
+router.post('/reset-password', async (req, res) => {
+  const { email, code, newPassword } = req.body;
+  try {
+    const resetData = resetCodes.get(email);
+    if (!resetData) return res.status(400).json({ message: 'Mã không tồn tại hoặc đã hết hạn' });
+
+    const { code: storedCode, expiresAt } = resetData;
+    if (Date.now() > expiresAt) {
+      resetCodes.delete(email);
+      return res.status(400).json({ message: 'Mã đã hết hạn' });
+    }
+    if (code !== storedCode) return res.status(400).json({ message: 'Mã không đúng' });
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ message: 'Email không tồn tại' });
+
+    user.password = newPassword;
+    await user.save();
+
+    resetCodes.delete(email);
+    res.json({ message: 'Đặt lại mật khẩu thành công' });
+  } catch (err) {
+    res.status(500).json({ message: 'Lỗi server', error: err.message });
   }
 });
 
