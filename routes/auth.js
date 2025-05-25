@@ -18,7 +18,7 @@ const authMiddleware = (req, res, next) => {
 };
 
 // Đăng ký
-router.post('/register', authMiddleware, async (req, res) => {
+router.post('/register', async (req, res) => {
   const { username, email, password } = req.body;
   try {
     let user = await User.findOne({ email });
@@ -32,7 +32,7 @@ router.post('/register', authMiddleware, async (req, res) => {
 });
 
 // Đăng nhập
-router.post('/login', authMiddleware, async (req, res) => {
+router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   try {
     const user = await User.findOne({ email });
