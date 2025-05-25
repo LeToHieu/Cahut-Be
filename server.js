@@ -34,7 +34,7 @@ io.on('connection', (socket) => {
   console.log('Client connected:', socket.id);
 
   socket.on('join-room', async ({ roomId, token }) => {
-    console.log('Client connected:', socket.id);
+    console.log(`Client connected to room: ${roomId} with socket id: ${socket.id}`);
     try {
       const decoded = jwt.verify(token, 'your_jwt_secret');
       const room = await Room.findOne({ roomId }).populate('users', 'username userImage');
@@ -153,56 +153,109 @@ io.on('connection', (socket) => {
       }else{
         state.isCorrectForLastQuestion[decoded.id] = false
       }
-      console.log(score);
     } catch (err) {
       socket.emit('error', { message: 'Lỗi khi gửi câu trả lời' });
     }
   });
 
-  socket.on('time-up', async ({ roomId }) => {
+  // socket.on('time-up', async ({ roomId }) => {
+  //   const state = gameState[roomId];
+  //   if (!state) return;
+
+  //   const currentQuestion = state.questions[state.currentQuestionIndex];
+
+  //   io.to(roomId).emit('show-results', {
+  //     correctAnswer: currentQuestion.correctAnswer,
+  //     question: currentQuestion.question,
+  //     type: currentQuestion.type,
+  //     imageUrl: currentQuestion.imageUrl,
+  //     options: currentQuestion.options,
+  //   });
+
+  //   setTimeout(async () => {
+  //     const room = await Room.findOne({ roomId }).populate('users', 'username userImage');
+  //     const leaderboard = room.users
+  //       .map((user) => ({
+  //         id: user._id.toString(),
+  //         username: user.username,
+  //         userImage: user.userImage,
+  //         score: state.scores[user._id] || 0,
+  //         isCorrectForLastQuestion: state.isCorrectForLastQuestion[user._id],
+  //       }))
+  //       .sort((a, b) => b.score - a.score)
+  //       .map((entry, index) => ({
+  //         ...entry,
+  //         rank: index + 1,
+  //       }));
+
+  //     // Kiểm tra xem đây có phải là câu hỏi cuối cùng không
+  //     if (state.currentQuestionIndex + 1 === state.questions.length) {
+  //       io.to(roomId).emit('game-ended', { leaderboard });
+  //       delete gameState[roomId];
+  //     } else {
+  //       io.to(roomId).emit('show-scores', { leaderboard });
+  //       setTimeout(() => {
+  //         io.to(roomId).emit('countdown', { countdown: 3 });
+  //         setTimeout(() => sendNextQuestion(roomId), 3000);
+  //       }, 3000);
+  //     }
+  //   }, 3000);
+  // });
+
+  socket.on('time-up', async ({ roomId, token }) => { // Thêm token vào tham số
     const state = gameState[roomId];
     if (!state) return;
 
-    const currentQuestion = state.questions[state.currentQuestionIndex];
-
-    io.to(roomId).emit('show-results', {
-      correctAnswer: currentQuestion.correctAnswer,
-      question: currentQuestion.question,
-      type: currentQuestion.type,
-      imageUrl: currentQuestion.imageUrl,
-      options: currentQuestion.options,
-    });
-
-    setTimeout(async () => {
-      const room = await Room.findOne({ roomId }).populate('users', 'username userImage');
-      const leaderboard = room.users
-        .map((user) => ({
-          id: user._id.toString(),
-          username: user.username,
-          userImage: user.userImage,
-          score: state.scores[user._id] || 0,
-          isCorrectForLastQuestion: state.isCorrectForLastQuestion[user._id],
-        }))
-        .sort((a, b) => b.score - a.score)
-        .map((entry, index) => ({
-          ...entry,
-          rank: index + 1,
-        }));
-
-      // Kiểm tra xem đây có phải là câu hỏi cuối cùng không
-      if (state.currentQuestionIndex + 1 === state.questions.length) {
-        io.to(roomId).emit('game-ended', { leaderboard });
-        delete gameState[roomId];
-      } else {
-        io.to(roomId).emit('show-scores', { leaderboard });
-        setTimeout(() => {
-          io.to(roomId).emit('countdown', { countdown: 3 });
-          setTimeout(() => sendNextQuestion(roomId), 3000);
-        }, 3000);
+    try {
+      const decoded = jwt.verify(token, 'your_jwt_secret');
+      const room = await Room.findOne({ roomId });
+      if (!room || room.creatorId.toString() !== decoded.id) {
+        socket.emit('error', { message: 'Chỉ có host mới được bỏ qua câu hỏi!' });
+        return;
       }
-    }, 3000);
-  });
 
+      const currentQuestion = state.questions[state.currentQuestionIndex];
+
+      io.to(roomId).emit('show-results', {
+        correctAnswer: currentQuestion.correctAnswer,
+        question: currentQuestion.question,
+        type: currentQuestion.type,
+        imageUrl: currentQuestion.imageUrl,
+        options: currentQuestion.options,
+      });
+
+      setTimeout(async () => {
+        const room = await Room.findOne({ roomId }).populate('users', 'username userImage');
+        const leaderboard = room.users
+          .map((user) => ({
+            id: user._id.toString(),
+            username: user.username,
+            userImage: user.userImage,
+            score: state.scores[user._id] || 0,
+            isCorrectForLastQuestion: state.isCorrectForLastQuestion[user._id],
+          }))
+          .sort((a, b) => b.score - a.score)
+          .map((entry, index) => ({
+            ...entry,
+            rank: index + 1,
+          }));
+
+        // Kiểm tra xem đây có phải là câu hỏi cuối cùng không
+        if (state.currentQuestionIndex + 1 === state.questions.length) {
+          io.to(roomId).emit('game-ended', { leaderboard });
+          delete gameState[roomId];
+        } else {
+          io.to(roomId).emit('show-scores', { leaderboard });
+          setTimeout(() => {
+            io.to(roomId).emit('countdown', { countdown: 3 });
+            setTimeout(() => sendNextQuestion(roomId), 3000);
+          }, 3000);
+        }
+      }, 3000);
+    } catch (err) {
+      socket.emit('error', { message: 'Lỗi khi xử lý time-up' });
+    }
+  });
 
   async function sendNextQuestion(roomId) {
     const state = gameState[roomId];
