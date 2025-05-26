@@ -210,7 +210,7 @@ io.on('connection', (socket) => {
           setTimeout(() => {
             io.to(roomId).emit('countdown', { countdown: 3 });
             setTimeout(() => sendNextQuestion(roomId), 3000);
-          }, 3000);
+          }, 6000);
         }
       }, 3000);
     } catch (err) {
