@@ -51,7 +51,14 @@ io.on('connection', (socket) => {
       });
 
       const state = gameState[roomId];
-      if (state && state.isPlaying) {
+
+      if (state && state.currentQuestionIndex < state.questions.length && room.creatorId.toString() === decoded.id) {
+        socket.emit('next-question', {
+          question: state.questions[state.currentQuestionIndex],
+          questionIndex: state.currentQuestionIndex,
+          totalQuestions: state.questions.length,
+        });
+      }else if (state && state.isPlaying) {
         socket.emit('game-started', { roomId });
       }
     } catch (err) {
