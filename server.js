@@ -51,12 +51,8 @@ io.on('connection', (socket) => {
       });
 
       const state = gameState[roomId];
-      if (state && state.currentQuestionIndex < state.questions.length) {
-        socket.emit('next-question', {
-          question: state.questions[state.currentQuestionIndex],
-          questionIndex: state.currentQuestionIndex,
-          totalQuestions: state.questions.length,
-        });
+      if (state && state.isPlaying) {
+        socket.emit('game-started', { roomId });
       }
     } catch (err) {
       socket.emit('error', { message: 'Lỗi khi tham gia phòng' });
@@ -117,6 +113,7 @@ io.on('connection', (socket) => {
         answers: {},
         answeredUsers: {},
         isCorrectForLastQuestion: {},
+        isPlaying: true,
       };
 
       io.to(roomId).emit('game-started', { roomId });
@@ -158,49 +155,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // socket.on('time-up', async ({ roomId }) => {
-  //   const state = gameState[roomId];
-  //   if (!state) return;
-
-  //   const currentQuestion = state.questions[state.currentQuestionIndex];
-
-  //   io.to(roomId).emit('show-results', {
-  //     correctAnswer: currentQuestion.correctAnswer,
-  //     question: currentQuestion.question,
-  //     type: currentQuestion.type,
-  //     imageUrl: currentQuestion.imageUrl,
-  //     options: currentQuestion.options,
-  //   });
-
-  //   setTimeout(async () => {
-  //     const room = await Room.findOne({ roomId }).populate('users', 'username userImage');
-  //     const leaderboard = room.users
-  //       .map((user) => ({
-  //         id: user._id.toString(),
-  //         username: user.username,
-  //         userImage: user.userImage,
-  //         score: state.scores[user._id] || 0,
-  //         isCorrectForLastQuestion: state.isCorrectForLastQuestion[user._id],
-  //       }))
-  //       .sort((a, b) => b.score - a.score)
-  //       .map((entry, index) => ({
-  //         ...entry,
-  //         rank: index + 1,
-  //       }));
-
-  //     // Kiểm tra xem đây có phải là câu hỏi cuối cùng không
-  //     if (state.currentQuestionIndex + 1 === state.questions.length) {
-  //       io.to(roomId).emit('game-ended', { leaderboard });
-  //       delete gameState[roomId];
-  //     } else {
-  //       io.to(roomId).emit('show-scores', { leaderboard });
-  //       setTimeout(() => {
-  //         io.to(roomId).emit('countdown', { countdown: 3 });
-  //         setTimeout(() => sendNextQuestion(roomId), 3000);
-  //       }, 3000);
-  //     }
-  //   }, 3000);
-  // });
 
   socket.on('time-up', async ({ roomId, token }) => { // Thêm token vào tham số
     const state = gameState[roomId];
@@ -268,25 +222,7 @@ io.on('connection', (socket) => {
         questionIndex: state.currentQuestionIndex,
         totalQuestions: state.questions.length,
       });
-    } else {
-      const room = await Room.findOne({ roomId }).populate('users', 'username userImage');
-      const leaderboard = room.users
-        .map((user) => ({
-          id: user._id.toString(),
-          username: user.username,
-          userImage: user.userImage,
-          score: state.scores[user._id] || 0,
-          isCorrectForLastQuestion: state.isCorrectForLastQuestion[user._id],
-        }))
-        .sort((a, b) => b.score - a.score)
-        .map((entry, index) => ({
-          ...entry,
-          rank: index + 1,
-        }));
-
-      io.to(roomId).emit('game-ended', { leaderboard });
-      delete gameState[roomId];
-    }
+    } 
   }
 });
 
