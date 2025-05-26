@@ -156,7 +156,7 @@ io.on('connection', (socket) => {
   });
 
 
-  socket.on('time-up', async ({ roomId, token }) => { // Thêm token vào tham số
+  socket.on('time-up', async ({ roomId, token }) => {
     const state = gameState[roomId];
     if (!state) return;
 
@@ -169,6 +169,13 @@ io.on('connection', (socket) => {
       }
 
       const currentQuestion = state.questions[state.currentQuestionIndex];
+
+      // Set isCorrectForLastQuestion to false for users who didn't answer
+      room.users.forEach(user => {
+        if (!state.answeredUsers[state.currentQuestionIndex]?.has(user._id.toString())) {
+          state.isCorrectForLastQuestion[user._id] = false;
+        }
+      });
 
       io.to(roomId).emit('show-results', {
         correctAnswer: currentQuestion.correctAnswer,
